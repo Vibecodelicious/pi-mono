@@ -26,22 +26,25 @@ Deep transform correctness is **not** the goal here — that is covered by the i
 - The pi monorepo is checked out and `npm install` has run from the repo root (so `node_modules/.bin/tsx` exists for `pi-test.sh`).
 - The bonsai package's `package.json` declares `"pi": { "extensions": ["./src/index.ts"] }` (verified in this repo).
 - `bash`, Node ≥ 20, and a working `pi-test.sh` at the repo root.
-- API credentials reachable to the shell:
-  - `BONSAI_E2E_API_KEY=<key>` (generic, mirrored into the provider's expected env at runtime by the operator), OR
-  - `ANTHROPIC_API_KEY=<key>` for the default provider.
+- API credentials discoverable through Pi's `AuthStorage.hasAuth(provider)`. Any of the following is sufficient:
+  - `pi login <provider>` has been run for the configured provider (writes `~/.pi/agent/auth.json`, mode 600).
+  - A hand-edited `api_key` entry for the configured provider in `~/.pi/agent/auth.json` (or under `$PI_CODING_AGENT_DIR/auth.json` if that override is set).
+  - A provider-specific env var that Pi recognises (`ANTHROPIC_API_KEY`, `ANTHROPIC_OAUTH_TOKEN`, `OPENAI_API_KEY`, `GEMINI_API_KEY`, AWS Bedrock credentials, GCP Vertex ADC, GitHub Copilot tokens, etc. — see `packages/ai/src/env-api-keys.ts` for the full surface).
+  - The harness-specific override `BONSAI_E2E_API_KEY=<key>` for the configured provider (applied via `setRuntimeApiKey()` before the gate check; highest priority per `auth-storage.ts:415-422`).
 - Optional pinning:
   - `BONSAI_E2E_PROVIDER` (default: `anthropic`)
   - `BONSAI_E2E_MODEL` (default: `claude-sonnet-4-6`)
 
-The harness fails fast with exit code 3 if neither env var is set; it does not silently skip.
+The harness gates scenario execution by shelling out to `test/e2e/check-credentials.ts` (a `tsx`-runnable shim that imports `AuthStorage` from `@mariozechner/pi-coding-agent`). On success the shim is silent and exits 0. On failure it exits 3 with a deterministic stderr message naming (i) the auth-store path including the `$PI_CODING_AGENT_DIR` override hint, (ii) the harness override `BONSAI_E2E_API_KEY`, and (iii) the operator-actionable next step (`pi login <provider>` or set `BONSAI_E2E_API_KEY`). The harness does NOT invoke `pi login` automatically.
 
 ---
 
 ## Pre-flight Checks
 
-1. From `pi/packages/context-bonsai/`, run `npm test` to confirm unit + integration tests are green against the current commit.
+1. From `pi/packages/context-bonsai/`, run `npm test` to confirm unit + integration tests are green against the current commit (the suite includes `test/e2e-credentials.test.ts`, the deterministic credential-discovery unit tests).
 2. From `pi/`, run `npm run check` to confirm biome / tsgo / browser-smoke pass.
-3. Smoke: `bash test/e2e/run-e2e.sh --scenario A` — should complete in well under 30 s and report `A: PASS`. If A fails on a fresh clone, do not move on; the extension probably isn't loading.
+3. Credential check (manual): `cd pi && node_modules/.bin/tsx packages/context-bonsai/test/e2e/check-credentials.ts` should exit 0. If it exits 3, the stderr message names the auth-store path, the `BONSAI_E2E_API_KEY` override, and the next step (`pi login <provider>` or set `BONSAI_E2E_API_KEY`).
+4. Smoke: `bash test/e2e/run-e2e.sh --scenario A` — should complete in well under 30 s and report `A: PASS`. If A fails on a fresh clone, do not move on; the extension probably isn't loading.
 
 ---
 

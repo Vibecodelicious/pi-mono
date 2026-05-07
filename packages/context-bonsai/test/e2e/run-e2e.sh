@@ -11,9 +11,16 @@
 #   bash test/e2e/run-e2e.sh --scenario A
 #   bash test/e2e/run-e2e.sh --all
 #
-# Required env:
-#   BONSAI_E2E_API_KEY=<provider-api-key>   # OR ANTHROPIC_API_KEY (the script
-#                                           # accepts either; see docs).
+# Credential discovery:
+#   The harness delegates to Pi's `AuthStorage.hasAuth(provider)` via the shim
+#   at `test/e2e/check-credentials.ts`. The shim accepts ANY credential source
+#   Pi recognises: `pi login <provider>`-installed entries in `auth.json`,
+#   hand-edited api_key entries, OAuth-token env vars (ANTHROPIC_OAUTH_TOKEN
+#   etc., see packages/ai/src/env-api-keys.ts), models.json fallback, and the
+#   harness override BONSAI_E2E_API_KEY (applied via setRuntimeApiKey).
+#
+# Optional env:
+#   BONSAI_E2E_API_KEY=<key>          # harness-only runtime override (any provider)
 #   BONSAI_E2E_PROVIDER (default: anthropic)
 #   BONSAI_E2E_MODEL    (default: claude-sonnet-4-6)
 #
@@ -67,21 +74,25 @@ if [[ -z "$SCENARIO" && "$RUN_ALL" -eq 0 ]]; then
 	exit 2
 fi
 
-# ---- credential gate ----
-# We accept either BONSAI_E2E_API_KEY (a generic env that the operator can set
-# to whatever the chosen provider expects) or ANTHROPIC_API_KEY (the
-# anthropic-specific env). For non-anthropic providers, the operator should
-# set BONSAI_E2E_API_KEY plus the provider's own env (Pi reads
-# packages/ai/src/env-api-keys.ts at startup).
-if [[ -z "${BONSAI_E2E_API_KEY:-}" && -z "${ANTHROPIC_API_KEY:-}" ]]; then
-	echo "run-e2e: missing API key — set BONSAI_E2E_API_KEY or ANTHROPIC_API_KEY before invoking." >&2
-	echo "  provider=$BONSAI_E2E_PROVIDER model=$BONSAI_E2E_MODEL" >&2
-	exit 3
-fi
-
 if [[ ! -x "$PI_TEST" ]]; then
 	echo "run-e2e: pi-test.sh not found or not executable at $PI_TEST" >&2
 	exit 4
+fi
+
+# ---- credential gate ----
+# Delegate to the credential-discovery shim, which calls Pi's
+# AuthStorage.hasAuth(provider). The shim handles BONSAI_E2E_API_KEY -> runtime
+# override translation and emits its own deterministic stderr error on miss.
+# Do not double-wrap or rephrase its message; let it surface verbatim.
+TSX_BIN="$PI_ROOT/node_modules/.bin/tsx"
+if [[ ! -x "$TSX_BIN" ]]; then
+	echo "run-e2e: tsx not found at $TSX_BIN — run npm install from pi/ first" >&2
+	exit 4
+fi
+(cd "$PI_ROOT" && "$TSX_BIN" packages/context-bonsai/test/e2e/check-credentials.ts)
+gate_rc=$?
+if [[ $gate_rc -ne 0 ]]; then
+	exit "$gate_rc"
 fi
 
 # ---- driver helpers ----
