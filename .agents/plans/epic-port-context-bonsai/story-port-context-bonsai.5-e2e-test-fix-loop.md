@@ -200,7 +200,7 @@ Each scenario starts from a fresh `mktemp -d -t pi-bonsai-XXXX` as `--session-di
 
 - Approval Status: approved
 - Approval Citation: user message 2026-04-23 "Do commit the plan" (auto mode)
-- Plan Commit Hash: pending — recorded in a follow-up commit on the same branch
+- Plan Commit Hash: 45df8a33 (`docs: approved plans for context-bonsai port epic`)
 - Ready-for-Orchestration: yes (orchestration deferred per user instruction in same exchange)
 
 ## Completion Checklist
