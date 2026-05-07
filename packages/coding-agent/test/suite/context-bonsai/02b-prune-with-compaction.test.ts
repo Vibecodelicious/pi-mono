@@ -3,12 +3,18 @@
  * Story P.2's Story Description: when the branch contains a `CompactionEntry`,
  * `buildSessionContext` injects a synthetic compaction-summary at the
  * beginning of `event.messages` and drops entries before
- * `firstKeptEntryId`.
+ * `firstKeptEntryId`. Independently, when the branch contains a
+ * `BranchSummaryEntry` (`session-manager.ts:385-387`), `buildSessionContext`
+ * injects a synthetic `branchSummary`-role message at that position. The two
+ * synthetic-injection paths are independent.
  *
- * This test seeds a compaction directly via `SessionManager.appendCompaction`,
- * prunes a range AFTER the compaction, and asserts that the post-transform
- * transcript:
+ * This test seeds BOTH a `CompactionEntry` AND a `BranchSummaryEntry` directly
+ * via `SessionManager` APIs (note: `branchWithSummary()` is a public method on
+ * `SessionManager` at `session-manager.ts:1146` — an iter-1 deviation note
+ * incorrectly claimed otherwise). It then prunes a range AFTER both
+ * synthetics, and asserts that the post-transform transcript:
  * - keeps the compaction-summary synthetic undisturbed
+ * - keeps the branch-summary synthetic undisturbed
  * - replaces the anchor message with the placeholder
  * - elides followers within the archive range
  *
@@ -68,11 +74,22 @@ describe("context-bonsai Story P.2: 02b-prune-with-compaction", () => {
 		const firstKeptId = entriesBeforeCompaction[1]!.id;
 		harness.sessionManager.appendCompaction("compaction-summary-text", firstKeptId, 500, undefined, false);
 
+		// Seed a BranchSummaryEntry on the current branch via the public
+		// SessionManager API. `branchWithSummary(branchFromId, summary)` sets
+		// `leafId = branchFromId` and appends a `branch_summary` entry as a
+		// child of that anchor — so we anchor it on the compaction id we just
+		// wrote, leaving us with a branch that contains pre-msgs, compaction,
+		// branch_summary, then the messages we'll drive via the harness below.
+		const compactionId = harness.sessionManager.getLeafId();
+		expect(compactionId).not.toBeNull();
+		harness.sessionManager.branchWithSummary(compactionId, "abandoned-path-summary");
+
 		// Manually sync the agent's in-memory `state.messages` from
-		// `buildSessionContext` so the compaction synthetic + the
-		// `firstKeptEntryId` drop reach the LLM context. We avoid
-		// `session.reload()` here because reload calls `resetApiProviders()`,
-		// which un-registers the faux provider for the rest of the test.
+		// `buildSessionContext` so the compaction synthetic + the branch-
+		// summary synthetic + the `firstKeptEntryId` drop reach the LLM
+		// context. We avoid `session.reload()` here because reload calls
+		// `resetApiProviders()`, which un-registers the faux provider for the
+		// rest of the test.
 		const sessionContext = harness.sessionManager.buildSessionContext();
 		harness.session.agent.state.messages = sessionContext.messages;
 
@@ -127,6 +144,12 @@ describe("context-bonsai Story P.2: 02b-prune-with-compaction", () => {
 
 		// Synthetic compaction summary survives at index 0.
 		expect(transcriptText).toContain("compaction-summary-text");
+		// Synthetic branch_summary survives untouched: branchSummary AgentMessages
+		// pass through `convertToLlm` as user-role text containing the seeded
+		// summary string, so the `(role, timestamp)` rewrite (which only matches
+		// user/assistant/toolResult roles AND never elides messages outside the
+		// archive's resolved range) must leave that text in place.
+		expect(transcriptText).toContain("abandoned-path-summary");
 		// Pre-compaction message dropped via firstKeptEntryId.
 		expect(transcriptText).not.toMatch(/user:pre-1(\b|$|\n)/);
 		// Placeholder injected.
