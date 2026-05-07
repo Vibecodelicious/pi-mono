@@ -15,7 +15,8 @@
 		"check": "echo 'nothing to check'"
 	},
 	"dependencies": {
-		"@mariozechner/pi-coding-agent": "*"
+		"@mariozechner/pi-coding-agent": "*",
+		"typebox": "^1.1.24"
 	},
 	"devDependencies": {
 		"@types/node": "^24.3.0",

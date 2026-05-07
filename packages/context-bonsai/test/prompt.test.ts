@@ -1,3 +1,12 @@
+/**
+ * Tests for the extension factory's wiring (Story P.1 + P.2).
+ *
+ * Story P.1 introduced the factory and BONSAI_GUIDANCE. Story P.2 expands
+ * the factory to also register the prune tool, the `session_start` rehydrate
+ * handler, and the `"context"` event handler. These tests pin the wiring
+ * surface so future stories don't accidentally drop a hook.
+ */
+
 import type {
 	BeforeAgentStartEvent,
 	BeforeAgentStartEventResult,
@@ -8,8 +17,8 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 import factory, { BONSAI_GUIDANCE } from "../src/index.js";
 
-describe("context-bonsai factory (Story P.1)", () => {
-	it("registers exactly one before_agent_start handler and no other handlers", async () => {
+describe("context-bonsai factory", () => {
+	it("registers before_agent_start, session_start, and context handlers + prune tool", async () => {
 		const on = vi.fn();
 		const registerTool = vi.fn();
 		const appendEntry = vi.fn();
@@ -17,19 +26,27 @@ describe("context-bonsai factory (Story P.1)", () => {
 
 		await factory(pi);
 
-		expect(on).toHaveBeenCalledTimes(1);
-		expect(on.mock.calls[0]?.[0]).toBe("before_agent_start");
-		expect(typeof on.mock.calls[0]?.[1]).toBe("function");
-		expect(registerTool).not.toHaveBeenCalled();
+		const events = on.mock.calls.map((c) => c[0]);
+		expect(events).toContain("before_agent_start");
+		expect(events).toContain("session_start");
+		expect(events).toContain("context");
+		expect(registerTool).toHaveBeenCalledTimes(1);
+		const tool = registerTool.mock.calls[0]?.[0] as { name: string; executionMode?: string };
+		expect(tool.name).toBe("context-bonsai-prune");
+		expect(tool.executionMode).toBe("sequential");
 		expect(appendEntry).not.toHaveBeenCalled();
 	});
 
 	it("appends BONSAI_GUIDANCE to the existing system prompt", async () => {
 		let captured: ExtensionHandler<BeforeAgentStartEvent, BeforeAgentStartEventResult> | undefined;
-		const on = vi.fn((_event: string, handler: unknown) => {
-			captured = handler as ExtensionHandler<BeforeAgentStartEvent, BeforeAgentStartEventResult>;
+		const on = vi.fn((event: string, handler: unknown) => {
+			if (event === "before_agent_start") {
+				captured = handler as ExtensionHandler<BeforeAgentStartEvent, BeforeAgentStartEventResult>;
+			}
 		});
-		const pi = { on } as unknown as ExtensionAPI;
+		const registerTool = vi.fn();
+		const appendEntry = vi.fn();
+		const pi = { on, registerTool, appendEntry } as unknown as ExtensionAPI;
 
 		await factory(pi);
 		expect(captured).toBeDefined();
