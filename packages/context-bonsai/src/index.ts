@@ -29,7 +29,20 @@ const factory: ExtensionFactory = (pi) => {
 	}));
 
 	pi.on("session_start", (_event, ctx) => {
-		store.hydrateFromEntries(ctx.sessionManager.getEntries());
+		const entries = ctx.sessionManager.getEntries();
+		store.hydrateFromEntries(entries);
+		// Hydrate turnCount from the session so gauge cadence is stable across
+		// process restarts (Pi's `-p` mode runs one turn per process; without
+		// hydration, turnCount would reset to 0 each invocation and the gauge
+		// would never reach the cadence threshold). Count user messages — each
+		// user message marks the start of one LLM-call turn.
+		let userMessageCount = 0;
+		for (const entry of entries) {
+			if (entry.type === "message" && entry.message?.role === "user") {
+				userMessageCount += 1;
+			}
+		}
+		state.turnCount = userMessageCount;
 	});
 
 	pi.registerTool(createPruneTool(pi, store, state));

@@ -14,6 +14,8 @@ import type {
 	ExtensionAPI,
 	ExtensionContext,
 	ExtensionHandler,
+	SessionEntry,
+	SessionStartEvent,
 } from "@mariozechner/pi-coding-agent";
 import { describe, expect, it, vi } from "vitest";
 import factory, { BONSAI_GUIDANCE } from "../src/index.js";
@@ -68,6 +70,96 @@ describe("context-bonsai factory", () => {
 		expect(result && typeof result === "object" && "systemPrompt" in result ? result.systemPrompt : undefined).toBe(
 			`BASE\n\n${BONSAI_GUIDANCE}`,
 		);
+	});
+
+	it("session_start hydrates turnCount from prior user messages so gauge cadence survives a process restart", async () => {
+		// Regression for Story P.5 iter 2 fix-loop, scenario E: Pi's `-p` mode
+		// runs one turn per process. Without session_start hydrating turnCount
+		// from the persisted user-message count, the cadence counter resets to
+		// 0 on every invocation and the gauge can never reach GAUGE_CADENCE
+		// (the in-memory factory closure is rebuilt on session reload, see
+		// state.ts comment header).
+		const handlers: Record<string, unknown> = {};
+		const on = vi.fn((event: string, handler: unknown) => {
+			handlers[event] = handler;
+		});
+		const registerTool = vi.fn();
+		const appendEntry = vi.fn();
+		const pi = { on, registerTool, appendEntry } as unknown as ExtensionAPI;
+		await factory(pi);
+
+		// Build a session with 4 prior user messages (count would be 4 after
+		// hydration; the next context call will increment to 5 and fire).
+		const userEntries: SessionEntry[] = [
+			{
+				id: "u1",
+				type: "message",
+				message: { role: "user", content: [{ type: "text", text: "u1" }], timestamp: 1 },
+			},
+			{
+				id: "a1",
+				type: "message",
+				message: { role: "assistant", content: [{ type: "text", text: "a1" }], timestamp: 2 },
+			},
+			{
+				id: "u2",
+				type: "message",
+				message: { role: "user", content: [{ type: "text", text: "u2" }], timestamp: 3 },
+			},
+			{
+				id: "a2",
+				type: "message",
+				message: { role: "assistant", content: [{ type: "text", text: "a2" }], timestamp: 4 },
+			},
+			{
+				id: "u3",
+				type: "message",
+				message: { role: "user", content: [{ type: "text", text: "u3" }], timestamp: 5 },
+			},
+			{
+				id: "a3",
+				type: "message",
+				message: { role: "assistant", content: [{ type: "text", text: "a3" }], timestamp: 6 },
+			},
+			{
+				id: "u4",
+				type: "message",
+				message: { role: "user", content: [{ type: "text", text: "u4" }], timestamp: 7 },
+			},
+			{
+				id: "a4",
+				type: "message",
+				message: { role: "assistant", content: [{ type: "text", text: "a4" }], timestamp: 8 },
+			},
+		] as unknown as SessionEntry[];
+		const sessionManagerStub = {
+			getEntries: () => userEntries,
+			getBranch: () => userEntries,
+		};
+		const ctxStub = {
+			sessionManager: sessionManagerStub,
+			getContextUsage: () => ({ tokens: 1000, contextWindow: 100000, percent: 1 }),
+		} as unknown as ExtensionContext;
+		const sessionStartHandler = handlers.session_start as ExtensionHandler<SessionStartEvent, void>;
+		expect(sessionStartHandler).toBeDefined();
+		await sessionStartHandler({ type: "session_start", reason: "reload" } as SessionStartEvent, ctxStub);
+
+		// Now fire the context handler; turnCount goes 4 -> 5 and gauge fires.
+		const contextHandler = handlers.context as ExtensionHandler<{ type: "context"; messages: unknown[] }, unknown>;
+		expect(contextHandler).toBeDefined();
+		const messages = [{ role: "user", content: [{ type: "text", text: "next prompt" }] }];
+		const result = (await contextHandler(
+			{ type: "context", messages } as { type: "context"; messages: unknown[] },
+			ctxStub,
+		)) as { messages?: { role: string; content: { type: string; text: string }[] }[] } | undefined;
+
+		const out = result?.messages ?? messages;
+		const last = out[out.length - 1] as { role: string; content: { type: string; text: string }[] };
+		const lastTexts = (last.content as { type: string; text: string }[])
+			.filter((p) => p.type === "text")
+			.map((p) => p.text)
+			.join("\n");
+		expect(lastTexts).toMatch(/\[CONTEXT GAUGE:/);
 	});
 
 	it("BONSAI_GUIDANCE covers the six cross-agent spec meanings", () => {
