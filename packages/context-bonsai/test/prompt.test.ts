@@ -1,10 +1,11 @@
 /**
- * Tests for the extension factory's wiring (Story P.1 + P.2).
+ * Tests for the extension factory's wiring (Story P.1 + P.2 + P.3).
  *
  * Story P.1 introduced the factory and BONSAI_GUIDANCE. Story P.2 expands
  * the factory to also register the prune tool, the `session_start` rehydrate
- * handler, and the `"context"` event handler. These tests pin the wiring
- * surface so future stories don't accidentally drop a hook.
+ * handler, and the `"context"` event handler. Story P.3 adds the retrieve
+ * tool registration. These tests pin the wiring surface so future stories
+ * don't accidentally drop a hook.
  */
 
 import type {
@@ -18,7 +19,7 @@ import { describe, expect, it, vi } from "vitest";
 import factory, { BONSAI_GUIDANCE } from "../src/index.js";
 
 describe("context-bonsai factory", () => {
-	it("registers before_agent_start, session_start, and context handlers + prune tool", async () => {
+	it("registers before_agent_start, session_start, and context handlers + prune and retrieve tools", async () => {
 		const on = vi.fn();
 		const registerTool = vi.fn();
 		const appendEntry = vi.fn();
@@ -30,10 +31,15 @@ describe("context-bonsai factory", () => {
 		expect(events).toContain("before_agent_start");
 		expect(events).toContain("session_start");
 		expect(events).toContain("context");
-		expect(registerTool).toHaveBeenCalledTimes(1);
-		const tool = registerTool.mock.calls[0]?.[0] as { name: string; executionMode?: string };
-		expect(tool.name).toBe("context-bonsai-prune");
-		expect(tool.executionMode).toBe("sequential");
+		expect(registerTool).toHaveBeenCalledTimes(2);
+		const tools = registerTool.mock.calls.map((c) => c[0] as { name: string; executionMode?: string });
+		const byName = new Map(tools.map((t) => [t.name, t]));
+		const pruneTool = byName.get("context-bonsai-prune");
+		const retrieveTool = byName.get("context-bonsai-retrieve");
+		expect(pruneTool).toBeDefined();
+		expect(retrieveTool).toBeDefined();
+		expect(pruneTool?.executionMode).toBe("sequential");
+		expect(retrieveTool?.executionMode).toBe("sequential");
 		expect(appendEntry).not.toHaveBeenCalled();
 	});
 

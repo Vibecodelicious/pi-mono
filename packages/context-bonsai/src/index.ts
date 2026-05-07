@@ -3,12 +3,14 @@ import { ArchiveStore } from "./archive-store.js";
 import { createContextHandler } from "./context-transform.js";
 import { BONSAI_GUIDANCE } from "./prompt.js";
 import { createPruneTool } from "./prune.js";
+import { createRetrieveTool } from "./retrieve.js";
 import { createState } from "./state.js";
 
 export { ArchiveStore } from "./archive-store.js";
 export { createContextHandler } from "./context-transform.js";
 export { BONSAI_GUIDANCE } from "./prompt.js";
 export { createPruneTool } from "./prune.js";
+export { createRetrieveTool } from "./retrieve.js";
 export {
 	ARCHIVE_CLEAR_CUSTOM_TYPE,
 	ARCHIVE_CUSTOM_TYPE,
@@ -31,6 +33,7 @@ const factory: ExtensionFactory = (pi) => {
 	});
 
 	pi.registerTool(createPruneTool(pi, store, state));
+	pi.registerTool(createRetrieveTool(pi, store));
 
 	pi.on("context", createContextHandler(store, state));
 };
