@@ -92,7 +92,13 @@ function readMessageRoleAndTimestamp(entry: SessionMessageEntry): MessageWithTim
  * - neither boundary sits inside an already-pruned (active) range
  * - no `assistant`/`toolResult` pair is split across the range boundary
  *   (every assistant `toolCall` inside the range must have its matching
- *   `toolResult` also inside).
+ *   `toolResult` also inside, AND every `toolResult` inside the range must
+ *   have its originating `toolCall` also inside). Both directions matter
+ *   because the cross-agent spec MUST ("range MUST NOT cut through
+ *   incomplete tool-call history") is direction-agnostic — a toolResult
+ *   inside the range whose toolCall lives in an assistant entry BEFORE the
+ *   range is exactly such a cut, and would leave the assistant's toolCall
+ *   visible to the model with no matching result.
  */
 function validateRange(
 	messageEntries: SessionMessageEntry[],
@@ -151,6 +157,16 @@ function validateRange(
 	for (const callId of callIdsInRange) {
 		if (!resultsInRange.has(callId)) {
 			return `range cuts through an incomplete tool call (callId=${callId}); choose boundaries that keep matching toolCall and toolResult together`;
+		}
+	}
+	// Reverse direction: every toolResult inside the range must have its
+	// originating toolCall also inside. If the toolCall is in an assistant
+	// entry BEFORE the range, archiving the toolResult would orphan the
+	// model-visible toolCall (visible call, hidden result) — which is exactly
+	// the directional-agnostic cut the spec MUST prevents.
+	for (const resultCallId of resultsInRange) {
+		if (!callIdsInRange.has(resultCallId)) {
+			return `range cuts through an incomplete tool call (orphan toolResult callId=${resultCallId}); from_pattern must include the originating toolCall`;
 		}
 	}
 

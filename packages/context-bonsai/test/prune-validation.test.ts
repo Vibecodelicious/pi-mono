@@ -226,6 +226,34 @@ describe("createPruneTool: validation", () => {
 		expect(text).toMatch(/cuts through an incomplete tool call/);
 	});
 
+	test("rejects range whose toolResult is inside but its originating toolCall is OUTSIDE the range (orphan toolResult)", async () => {
+		// Cross-agent spec MUST is direction-agnostic: a toolResult inside the
+		// range whose originating toolCall is in an assistant entry BEFORE the
+		// range is exactly the kind of incomplete-tool-call cut the validator
+		// must reject. If allowed, the toolCall would remain visible to the
+		// model with no matching result hidden inside the placeholder.
+		entryCounter = 0;
+		const head = userMsgEntry("head");
+		const callId = "tc-orphan-1";
+		// toolCall lives BEFORE the chosen range
+		const aCall = assistantToolCallEntry("bash", callId, { cmd: "ls" });
+		const middle = userMsgEntry("middle-anchor");
+		// toolResult sits inside the range
+		const aResult = toolResultEntry(callId, "bash", "ls-output");
+		const tail = userMsgEntry("end-tail");
+		const text = await runPrune({
+			branch: [head, aCall, middle, aResult, tail],
+			params: {
+				from_pattern: "middle-anchor",
+				to_pattern: "end-tail",
+				summary: "ok",
+				index_terms: ["x"],
+			},
+		});
+		expect(text).toMatch(/orphan toolResult callId=tc-orphan-1/);
+		expect(text).toMatch(/from_pattern must include the originating toolCall/);
+	});
+
 	test("happy path: persists archive + returns OpenCode-shaped success string", async () => {
 		entryCounter = 0;
 		const a = userMsgEntry("alpha-msg", 1000);
