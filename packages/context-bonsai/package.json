@@ -12,7 +12,8 @@
 	"scripts": {
 		"clean": "echo 'nothing to clean'",
 		"test": "vitest --run",
-		"check": "echo 'nothing to check'"
+		"check": "echo 'nothing to check'",
+		"e2e": "bash test/e2e/run-e2e.sh --all"
 	},
 	"dependencies": {
 		"@mariozechner/pi-coding-agent": "*",
