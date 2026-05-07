@@ -23,6 +23,7 @@
 import type { AgentMessage } from "@mariozechner/pi-agent-core";
 import type { ContextEvent, ExtensionContext } from "@mariozechner/pi-coding-agent";
 import type { ArchiveStore } from "./archive-store.js";
+import { maybeInjectGauge } from "./gauge.js";
 import type { ArchiveAnchorRole, ArchiveRecord } from "./schema.js";
 import type { BonsaiState } from "./state.js";
 
@@ -63,7 +64,7 @@ function findMessageByRoleTimestamp(
 
 export function createContextHandler(
 	store: ArchiveStore,
-	_state: BonsaiState,
+	state: BonsaiState,
 ): (event: ContextEvent, ctx: ExtensionContext) => Promise<ContextEventResult | undefined> {
 	return async (event, ctx) => {
 		// Capability gate: a stripped-down ctx without sessionManager.getBranch
@@ -75,76 +76,94 @@ export function createContextHandler(
 		const branch = ctx.sessionManager.getBranch();
 		const branchEntryIds = new Set(branch.map((e) => e.id));
 		const active = store.listActive(branchEntryIds);
-		if (active.length === 0) {
-			return undefined;
-		}
 
-		const messages = event.messages;
+		// Phase 1: archive placeholders. Compute resolved archives even if the
+		// list is empty so we share a single transcript-rewrite pass with the
+		// gauge step below.
+		let messages = event.messages;
+		let archivesApplied = false;
 
-		// Resolve each archive's (anchorIdx, rangeEndIdx) up-front against the
-		// unmodified array. Skip silently on miss.
-		type Resolved = { archive: ArchiveRecord; anchorIdx: number; rangeEndIdx: number };
-		const resolved: Resolved[] = [];
-		for (const archive of active) {
-			const anchorIdx = findMessageByRoleTimestamp(messages, archive.anchorRole, archive.anchorTimestamp, 0);
-			if (anchorIdx === -1) continue;
-			const rangeEndIdx = findMessageByRoleTimestamp(
-				messages,
-				archive.rangeEndRole,
-				archive.rangeEndTimestamp,
-				anchorIdx,
-			);
-			if (rangeEndIdx === -1) continue;
-			resolved.push({ archive, anchorIdx, rangeEndIdx });
-		}
-
-		if (resolved.length === 0) {
-			return undefined;
-		}
-
-		// Sort by anchor index so we can apply rewrites in document order
-		// without index shifting (we'll rebuild a fresh array in one pass).
-		resolved.sort((a, b) => a.anchorIdx - b.anchorIdx);
-
-		// Drop overlapping archives (defensive — validation should reject
-		// these on creation, but a later compaction could in theory leave
-		// pathological state). When two ranges overlap, keep the earlier-
-		// indexed one and drop the later.
-		const accepted: Resolved[] = [];
-		let lastEnd = -1;
-		for (const r of resolved) {
-			if (r.anchorIdx <= lastEnd) continue;
-			accepted.push(r);
-			lastEnd = r.rangeEndIdx;
-		}
-
-		// Build the rewritten transcript in a single pass.
-		const out: AgentMessage[] = [];
-		let i = 0;
-		let cursor = 0;
-		while (i < messages.length) {
-			if (cursor < accepted.length && i === accepted[cursor].anchorIdx) {
-				const r = accepted[cursor];
-				const original = messages[r.anchorIdx];
-				const originalTimestamp =
-					typeof (original as { timestamp?: unknown }).timestamp === "number"
-						? (original as { timestamp: number }).timestamp
-						: r.archive.anchorTimestamp;
-				const placeholderMessage = {
-					role: "user",
-					content: [{ type: "text", text: buildPlaceholderText(r.archive) }],
-					timestamp: originalTimestamp,
-				} as unknown as AgentMessage;
-				out.push(placeholderMessage);
-				// Skip followers up to and including range-end.
-				i = r.rangeEndIdx + 1;
-				cursor++;
-				continue;
+		if (active.length > 0) {
+			// Resolve each archive's (anchorIdx, rangeEndIdx) up-front against the
+			// unmodified array. Skip silently on miss.
+			type Resolved = { archive: ArchiveRecord; anchorIdx: number; rangeEndIdx: number };
+			const resolved: Resolved[] = [];
+			for (const archive of active) {
+				const anchorIdx = findMessageByRoleTimestamp(messages, archive.anchorRole, archive.anchorTimestamp, 0);
+				if (anchorIdx === -1) continue;
+				const rangeEndIdx = findMessageByRoleTimestamp(
+					messages,
+					archive.rangeEndRole,
+					archive.rangeEndTimestamp,
+					anchorIdx,
+				);
+				if (rangeEndIdx === -1) continue;
+				resolved.push({ archive, anchorIdx, rangeEndIdx });
 			}
-			out.push(messages[i]);
-			i++;
+
+			if (resolved.length > 0) {
+				// Sort by anchor index so we can apply rewrites in document order
+				// without index shifting (we'll rebuild a fresh array in one pass).
+				resolved.sort((a, b) => a.anchorIdx - b.anchorIdx);
+
+				// Drop overlapping archives (defensive — validation should reject
+				// these on creation, but a later compaction could in theory leave
+				// pathological state). When two ranges overlap, keep the earlier-
+				// indexed one and drop the later.
+				const accepted: Resolved[] = [];
+				let lastEnd = -1;
+				for (const r of resolved) {
+					if (r.anchorIdx <= lastEnd) continue;
+					accepted.push(r);
+					lastEnd = r.rangeEndIdx;
+				}
+
+				// Build the rewritten transcript in a single pass.
+				const out: AgentMessage[] = [];
+				let i = 0;
+				let cursor = 0;
+				while (i < messages.length) {
+					if (cursor < accepted.length && i === accepted[cursor].anchorIdx) {
+						const r = accepted[cursor];
+						const original = messages[r.anchorIdx];
+						const originalTimestamp =
+							typeof (original as { timestamp?: unknown }).timestamp === "number"
+								? (original as { timestamp: number }).timestamp
+								: r.archive.anchorTimestamp;
+						const placeholderMessage = {
+							role: "user",
+							content: [{ type: "text", text: buildPlaceholderText(r.archive) }],
+							timestamp: originalTimestamp,
+						} as unknown as AgentMessage;
+						out.push(placeholderMessage);
+						// Skip followers up to and including range-end.
+						i = r.rangeEndIdx + 1;
+						cursor++;
+						continue;
+					}
+					out.push(messages[i]);
+					i++;
+				}
+
+				messages = out;
+				archivesApplied = true;
+			}
 		}
 
-		return { messages: out };
+		// Phase 2: gauge injection. Runs after archive placeholders so the
+		// gauge attaches to the *visible* last user message, mirroring
+		// OpenCode's `messages.transform` ordering. The cadence counter
+		// advances on every "context" event regardless of whether usage data
+		// or archives were available — `maybeInjectGauge` returns a new array
+		// reference iff it actually appended.
+		const usage = typeof ctx.getContextUsage === "function" ? ctx.getContextUsage() : undefined;
+		const after = maybeInjectGauge(messages, state, usage);
+		const gaugeInjected = after !== messages;
+
+		if (archivesApplied || gaugeInjected) {
+			return { messages: after };
+		}
+
+		return undefined;
 	};
 }
