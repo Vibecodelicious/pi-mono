@@ -112,11 +112,13 @@ pi_turn() {
 	local prompt="$1"; shift
 
 	local err_path="${log_path%.jsonl}.err"
+	# Bonsai is auto-discovered via the .pi/extensions/context-bonsai symlink
+	# at the pi-mono root, so no explicit -e flag is needed. (An -e flag here
+	# would double-load the extension and cause "tool conflicts" errors.)
 	local cmd=(
 		"$PI_TEST" -p --mode json
 		--provider "$BONSAI_E2E_PROVIDER"
 		--model "$BONSAI_E2E_MODEL"
-		-e packages/context-bonsai
 		--session-dir "$session_dir"
 	)
 	if [[ -n "$session_file" ]]; then
