@@ -27,7 +27,7 @@
 import { type Context, fauxAssistantMessage, fauxToolCall, type Message } from "@mariozechner/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import bonsaiFactory from "../../../../context-bonsai/src/index.js";
-import { createHarness, type Harness } from "../harness.js";
+import { createHarness, type Harness } from "./sdk-harness.js";
 
 describe("context-bonsai Story P.2: 02b-prune-with-compaction", () => {
 	const harnesses: Harness[] = [];
@@ -69,9 +69,11 @@ describe("context-bonsai Story P.2: 02b-prune-with-compaction", () => {
 		});
 
 		// Append a compaction entry. firstKeptEntryId is the second of those
-		// two messages so the user message before it is dropped.
-		const entriesBeforeCompaction = harness.sessionManager.getEntries();
-		const firstKeptId = entriesBeforeCompaction[1]!.id;
+		// two messages so the user message before it is dropped. The SDK
+		// session begins with non-message bookkeeping entries (model/thinking
+		// changes), so select by message type rather than absolute index.
+		const messageEntriesBeforeCompaction = harness.sessionManager.getEntries().filter((e) => e.type === "message");
+		const firstKeptId = messageEntriesBeforeCompaction[1]!.id;
 		harness.sessionManager.appendCompaction("compaction-summary-text", firstKeptId, 500, undefined, false);
 
 		// Seed a BranchSummaryEntry on the current branch via the public

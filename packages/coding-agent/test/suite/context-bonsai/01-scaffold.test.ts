@@ -1,7 +1,7 @@
 import { fauxAssistantMessage } from "@mariozechner/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import bonsaiFactory, { BONSAI_GUIDANCE } from "../../../../context-bonsai/src/index.js";
-import { createHarness, type Harness } from "../harness.js";
+import { createHarness, type Harness } from "./sdk-harness.js";
 
 describe("context-bonsai Story P.1 scaffold", () => {
 	const harnesses: Harness[] = [];

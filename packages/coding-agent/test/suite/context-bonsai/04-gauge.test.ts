@@ -18,7 +18,7 @@
 import { type Context, fauxAssistantMessage, type Message, type TextContent, type Usage } from "@mariozechner/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import bonsaiFactory from "../../../../context-bonsai/src/index.js";
-import { createHarness, type Harness } from "../harness.js";
+import { createHarness, type Harness } from "./sdk-harness.js";
 
 const GAUGE_REGEX = /^<system-reminder>\n\[CONTEXT GAUGE: .* tokens \(\d+%\)\]/;
 

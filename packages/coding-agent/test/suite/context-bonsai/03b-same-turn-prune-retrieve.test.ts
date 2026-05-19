@@ -13,7 +13,7 @@
 import { type Context, fauxAssistantMessage, fauxToolCall, type Message } from "@mariozechner/pi-ai";
 import { afterEach, describe, expect, it } from "vitest";
 import bonsaiFactory from "../../../../context-bonsai/src/index.js";
-import { createHarness, type Harness } from "../harness.js";
+import { createHarness, type Harness } from "./sdk-harness.js";
 
 describe("context-bonsai Story P.3: 03b-same-turn-prune-retrieve", () => {
 	const harnesses: Harness[] = [];
