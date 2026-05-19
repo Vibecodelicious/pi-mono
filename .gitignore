@@ -35,8 +35,6 @@ out.html
 packages/coding-agent/binaries/
 todo.md
 plans/
-!.agents/plans/
-!.agents/plans/**
 .pi/hf-sessions/
 .pi/hf-sessions-backup/
 collect.sh

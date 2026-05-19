@@ -1,5 +1,0 @@
-{"version":3,"id":"019d-fixture-session","timestamp":"2026-05-06T00:00:00.000Z","cwd":"/tmp/fixture"}
-{"type":"message","id":"msg1","parentId":null,"timestamp":"2026-05-06T00:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"hello"}],"timestamp":1000}}
-{"type":"message","id":"msg2","parentId":"msg1","timestamp":"2026-05-06T00:00:02.000Z","message":{"role":"assistant","content":[{"type":"text","text":"hi"}],"timestamp":2000}}
-{"type":"custom","customType":"context-bonsai:archive","data":{"anchorEntryId":"msg1","anchorRole":"user","anchorTimestamp":1000,"rangeEndEntryId":"msg2","rangeEndRole":"assistant","rangeEndTimestamp":2000,"summary":"greeting","indexTerms":["hello"],"createdInTurn":1},"id":"cust1","parentId":"msg2","timestamp":"2026-05-06T00:00:03.000Z"}
-{"type":"message","id":"msg3","parentId":"cust1","timestamp":"2026-05-06T00:00:04.000Z","message":{"role":"user","content":[{"type":"text","text":"the magic word is OPENSESAME12345"}],"timestamp":3000}}

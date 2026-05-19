@@ -1,4 +1,0 @@
-{"version":3,"id":"019d-fixture-clear","timestamp":"2026-05-06T00:00:00.000Z","cwd":"/tmp/fixture"}
-{"type":"message","id":"msg1","parentId":null,"timestamp":"2026-05-06T00:00:01.000Z","message":{"role":"user","content":[{"type":"text","text":"hello"}],"timestamp":1000}}
-{"type":"custom","customType":"context-bonsai:archive","data":{"anchorEntryId":"msg1","anchorRole":"user","anchorTimestamp":1000,"rangeEndEntryId":"msg1","rangeEndRole":"user","rangeEndTimestamp":1000,"summary":"s","indexTerms":["k"],"createdInTurn":1},"id":"a1","parentId":"msg1","timestamp":"2026-05-06T00:00:02.000Z"}
-{"type":"custom","customType":"context-bonsai:archive-clear","data":{"anchorEntryId":"msg1"},"id":"a2","parentId":"a1","timestamp":"2026-05-06T00:00:03.000Z"}

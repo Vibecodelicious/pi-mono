@@ -1,6 +1,0 @@
-{"type":"session","version":3,"id":"019d-e2e-fixture-err","timestamp":"2026-05-06T00:00:00.000Z","cwd":"/tmp/fixture"}
-{"type":"agent_start"}
-{"type":"turn_start"}
-{"type":"tool_execution_start","toolCallId":"call_x","toolName":"context-bonsai-retrieve","args":{"anchor_id":"missing"}}
-{"type":"tool_execution_end","toolCallId":"call_x","toolName":"context-bonsai-retrieve","result":{"content":[{"type":"text","text":"Error: No archive found for message missing"}],"details":{}},"isError":true}
-{"type":"agent_end","messages":[]}

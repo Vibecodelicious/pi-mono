@@ -1,6 +1,0 @@
-{"type":"session","version":3,"id":"019d-e2e-gauge","timestamp":"2026-05-06T00:00:00.000Z","cwd":"/tmp/fixture"}
-{"type":"agent_start"}
-{"type":"turn_start"}
-{"type":"message_start","message":{"role":"user","content":[{"type":"text","text":"turn 5"},{"type":"text","text":"<system-reminder>\n[CONTEXT GAUGE: 1234 / 200000 tokens (1%)] selection contract\n</system-reminder>"}],"timestamp":5000}}
-{"type":"message_end","message":{"role":"user","content":[{"type":"text","text":"turn 5"},{"type":"text","text":"<system-reminder>\n[CONTEXT GAUGE: 1234 / 200000 tokens (1%)] selection contract\n</system-reminder>"}],"timestamp":5000}}
-{"type":"agent_end","messages":[]}
